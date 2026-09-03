@@ -4,7 +4,7 @@ Tags: management, updates, inventory, monitoring
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 0.2.0
+Stable tag: 0.2.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,9 @@ https://github.com/plugsent/plugsent
 2. A connected site reporting its inventory (shown in the Plugsent dashboard).
 
 == Changelog ==
+
+= 0.2.1 =
+* Fix: incoming command type was being mangled by sanitize_key, so inventory requests were rejected as unsupported.
 
 = 0.2.0 =
 * New: update.run command — update single plugins, themes, or WordPress core from the dashboard.

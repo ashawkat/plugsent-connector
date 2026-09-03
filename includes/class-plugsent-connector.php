@@ -301,7 +301,10 @@ class Plugsent_Connector {
 
 		foreach ( (array) ( $payload['commands'] ?? array() ) as $command ) {
 			$id   = isset( $command['id'] ) ? (int) $command['id'] : 0;
-			$type = isset( $command['type'] ) ? sanitize_key( $command['type'] ) : '';
+			// NOTE: do not sanitize_key() the type - it strips dots and
+			// turns `inventory.get` into `inventoryget`. The type comes from
+			// the signed platform response, so compare it exactly instead.
+			$type = isset( $command['type'] ) ? trim( (string) $command['type'] ) : '';
 
 			if ( $id < 1 ) {
 				continue;

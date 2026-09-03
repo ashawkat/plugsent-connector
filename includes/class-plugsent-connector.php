@@ -27,9 +27,28 @@ class Plugsent_Connector {
 		add_action( 'init', array( __CLASS__, 'load_textdomain' ) );
 		add_action( self::CRON_HOOK, array( __CLASS__, 'tick' ) );
 		add_action( 'admin_menu', array( __CLASS__, 'register_menu' ) );
+		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_admin_assets' ) );
 		add_action( 'admin_post_plugsent_pair', array( __CLASS__, 'handle_pair' ) );
 		add_action( 'admin_post_plugsent_sync', array( __CLASS__, 'handle_sync' ) );
 		add_action( 'admin_post_plugsent_disconnect', array( __CLASS__, 'handle_disconnect' ) );
+	}
+
+	/**
+	 * Brand stylesheet (Google Sans + header styles), only on the settings page.
+	 *
+	 * @param string $hook_suffix Current admin page hook.
+	 */
+	public static function enqueue_admin_assets( $hook_suffix ) {
+		if ( 'settings_page_' . self::PAGE_SLUG !== $hook_suffix ) {
+			return;
+		}
+
+		wp_enqueue_style(
+			'plugsent-connector-admin',
+			plugins_url( 'assets/plugsent-admin.css', PLUGSENT_CONNECTOR_FILE ),
+			array(),
+			PLUGSENT_CONNECTOR_VERSION
+		);
 	}
 
 	public static function load_textdomain() {
@@ -90,7 +109,28 @@ class Plugsent_Connector {
 		$notice    = isset( $_GET['plugsent_msg'] ) ? sanitize_key( wp_unslash( $_GET['plugsent_msg'] ) ) : '';
 		?>
 		<div class="wrap">
-			<h1><?php esc_html_e( 'Plugsent Connector', 'plugsent-connector' ); ?></h1>
+			<div class="plugsent-header">
+				<svg class="plugsent-mark" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+					<defs>
+						<linearGradient id="plugsent-mark-bg" x1="0" y1="0" x2="1" y2="1">
+							<stop offset="0" stop-color="#818CF8"/>
+							<stop offset="1" stop-color="#4338CA"/>
+						</linearGradient>
+					</defs>
+					<rect width="64" height="64" rx="14.5" fill="url(#plugsent-mark-bg)"/>
+					<g fill="#FFFFFF">
+						<rect x="24.5" y="11" width="6.5" height="14" rx="3.25"/>
+						<rect x="33" y="11" width="6.5" height="14" rx="3.25"/>
+						<path d="M19 23.5 h26 v13.5 a13 13 0 0 1 -13 13 a13 13 0 0 1 -13 -13 Z"/>
+					</g>
+					<path d="M32 50 v3.5 c0 3 -2.2 4.5 -4.8 4.5 h-4.4 c-2.2 0 -3.8 1.3 -3.8 3"
+						  fill="none" stroke="#FFFFFF" stroke-width="4.5" stroke-linecap="round"/>
+				</svg>
+				<div>
+					<h1><?php esc_html_e( 'Plugsent Connector', 'plugsent-connector' ); ?></h1>
+					<p><?php esc_html_e( 'Connects this site to your Plugsent control plane — outbound-only, signed, and revocable.', 'plugsent-connector' ); ?></p>
+				</div>
+			</div>
 
 			<?php if ( 'paired' === $notice ) : ?>
 				<div class="notice notice-success"><p><?php esc_html_e( 'Paired successfully. The site will check in every minute.', 'plugsent-connector' ); ?></p></div>

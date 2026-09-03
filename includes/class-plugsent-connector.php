@@ -108,7 +108,7 @@ class Plugsent_Connector {
 		$connected = self::is_connected();
 		$notice    = isset( $_GET['plugsent_msg'] ) ? sanitize_key( wp_unslash( $_GET['plugsent_msg'] ) ) : '';
 		?>
-		<div class="wrap">
+		<div class="wrap plugsent-wrap">
 			<div class="plugsent-header">
 				<svg class="plugsent-mark" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
 					<defs>
@@ -126,66 +126,85 @@ class Plugsent_Connector {
 					<path d="M32 50 v3.5 c0 3 -2.2 4.5 -4.8 4.5 h-4.4 c-2.2 0 -3.8 1.3 -3.8 3"
 						  fill="none" stroke="#FFFFFF" stroke-width="4.5" stroke-linecap="round"/>
 				</svg>
-				<div>
+				<div class="plugsent-header-text">
 					<h1><?php esc_html_e( 'Plugsent Connector', 'plugsent-connector' ); ?></h1>
 					<p><?php esc_html_e( 'Connects this site to your Plugsent control plane — outbound-only, signed, and revocable.', 'plugsent-connector' ); ?></p>
 				</div>
+				<span class="plugsent-pill plugsent-pill-<?php echo $connected ? 'on' : 'off'; ?>">
+					<span class="plugsent-pill-dot"></span>
+					<?php echo $connected ? esc_html__( 'Connected', 'plugsent-connector' ) : esc_html__( 'Not connected', 'plugsent-connector' ); ?>
+				</span>
 			</div>
 
 			<?php if ( 'paired' === $notice ) : ?>
-				<div class="notice notice-success"><p><?php esc_html_e( 'Paired successfully. The site will check in every minute.', 'plugsent-connector' ); ?></p></div>
+				<div class="notice notice-success plugsent-notice"><p><?php esc_html_e( 'Paired successfully. The site will check in every minute.', 'plugsent-connector' ); ?></p></div>
 			<?php elseif ( 'synced' === $notice ) : ?>
-				<div class="notice notice-success"><p><?php esc_html_e( 'Sync completed.', 'plugsent-connector' ); ?></p></div>
+				<div class="notice notice-success plugsent-notice"><p><?php esc_html_e( 'Sync completed.', 'plugsent-connector' ); ?></p></div>
 			<?php elseif ( 'bad_code' === $notice ) : ?>
-				<div class="notice notice-error"><p><?php esc_html_e( 'Pairing failed: the code is invalid, expired, or already used.', 'plugsent-connector' ); ?></p></div>
+				<div class="notice notice-error plugsent-notice"><p><?php esc_html_e( 'Pairing failed: the code is invalid, expired, or already used.', 'plugsent-connector' ); ?></p></div>
 			<?php elseif ( 'unreachable' === $notice ) : ?>
-				<div class="notice notice-error"><p><?php esc_html_e( 'Pairing failed: could not reach the Plugsent server. Check the Server URL.', 'plugsent-connector' ); ?></p></div>
+				<div class="notice notice-error plugsent-notice"><p><?php esc_html_e( 'Pairing failed: could not reach the Plugsent server. Check the Server URL.', 'plugsent-connector' ); ?></p></div>
 			<?php elseif ( 'disconnected' === $notice ) : ?>
-				<div class="notice notice-warning"><p><?php esc_html_e( 'Disconnected from Plugsent.', 'plugsent-connector' ); ?></p></div>
+				<div class="notice notice-warning plugsent-notice"><p><?php esc_html_e( 'Disconnected from Plugsent.', 'plugsent-connector' ); ?></p></div>
 			<?php elseif ( 'revoked' === $notice ) : ?>
-				<div class="notice notice-warning"><p><?php esc_html_e( 'Plugsent revoked access for this site. Pair again to reconnect.', 'plugsent-connector' ); ?></p></div>
+				<div class="notice notice-warning plugsent-notice"><p><?php esc_html_e( 'Plugsent revoked access for this site. Pair again to reconnect.', 'plugsent-connector' ); ?></p></div>
 			<?php endif; ?>
 
 			<?php if ( $connected ) : ?>
-				<p>
-					<em><?php esc_html_e( 'Connected.', 'plugsent-connector' ); ?></em>
-					<?php $last = get_option( self::OPTION_LAST_SYNC ); ?>
-					<?php if ( $last ) : ?>
-						<?php esc_html_e( 'Last check-in:', 'plugsent-connector' ); ?>
-						<?php echo esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $last ) ); ?>
-					<?php endif; ?>
-				</p>
-				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-					<input type="hidden" name="action" value="plugsent_sync" />
-					<?php wp_nonce_field( 'plugsent_sync' ); ?>
-					<?php submit_button( __( 'Sync now', 'plugsent-connector' ), 'secondary', 'submit', false ); ?>
-				</form>
-				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"
-					onsubmit="return confirm('<?php esc_attr_e( 'Disconnect this site from Plugsent?', 'plugsent-connector' ); ?>');">
-					<input type="hidden" name="action" value="plugsent_disconnect" />
-					<?php wp_nonce_field( 'plugsent_disconnect' ); ?>
-					<?php submit_button( __( 'Disconnect', 'plugsent-connector' ), 'delete', 'submit', false ); ?>
-				</form>
+				<div class="plugsent-card">
+					<div class="plugsent-status">
+						<span class="plugsent-dot"></span>
+						<div>
+							<strong><?php esc_html_e( 'Connected', 'plugsent-connector' ); ?></strong>
+							<?php $last = get_option( self::OPTION_LAST_SYNC ); ?>
+							<?php if ( $last ) : ?>
+								<p class="plugsent-muted">
+									<?php
+									printf(
+										/* translators: %s: date/time of last check-in */
+										esc_html__( 'Last check-in: %s', 'plugsent-connector' ),
+										esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $last ) )
+									);
+									?>
+								</p>
+							<?php endif; ?>
+						</div>
+					</div>
+					<div class="plugsent-actions">
+						<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+							<input type="hidden" name="action" value="plugsent_sync" />
+							<?php wp_nonce_field( 'plugsent_sync' ); ?>
+							<?php submit_button( __( 'Sync now', 'plugsent-connector' ), 'primary', 'submit', false ); ?>
+						</form>
+						<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"
+							onsubmit="return confirm('<?php esc_attr_e( 'Disconnect this site from Plugsent?', 'plugsent-connector' ); ?>');">
+							<input type="hidden" name="action" value="plugsent_disconnect" />
+							<?php wp_nonce_field( 'plugsent_disconnect' ); ?>
+							<?php submit_button( __( 'Disconnect', 'plugsent-connector' ), 'secondary', 'submit', false ); ?>
+						</form>
+					</div>
+				</div>
 			<?php else : ?>
-				<p><?php esc_html_e( 'Paste the credentials shown in your Plugsent dashboard under “Connect site”.', 'plugsent-connector' ); ?></p>
-				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-					<input type="hidden" name="action" value="plugsent_pair" />
-					<?php wp_nonce_field( 'plugsent_pair' ); ?>
-					<table class="form-table" role="presentation">
-						<tr>
-							<th scope="row"><label for="plugsent_server"><?php esc_html_e( 'Plugsent server URL', 'plugsent-connector' ); ?></label></th>
-							<td><input type="url" id="plugsent_server" name="plugsent_server" class="regular-text code" required
+				<div class="plugsent-card">
+					<p class="plugsent-muted"><?php esc_html_e( 'Paste the credentials shown in your Plugsent dashboard under “Connect site”.', 'plugsent-connector' ); ?></p>
+					<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+						<input type="hidden" name="action" value="plugsent_pair" />
+						<?php wp_nonce_field( 'plugsent_pair' ); ?>
+						<div class="plugsent-field">
+							<label for="plugsent_server"><?php esc_html_e( 'Plugsent server URL', 'plugsent-connector' ); ?></label>
+							<input type="url" id="plugsent_server" name="plugsent_server" class="regular-text code" required
 								placeholder="https://plugsent.example.com"
-								value="<?php echo esc_attr( (string) get_option( self::OPTION_SERVER ) ); ?>" /></td>
-						</tr>
-						<tr>
-							<th scope="row"><label for="plugsent_code"><?php esc_html_e( 'Pairing code', 'plugsent-connector' ); ?></label></th>
-							<td><input type="text" id="plugsent_code" name="plugsent_code" class="regular-text code" required
-								placeholder="PLSG-XXXXXXXXXXXX" /></td>
-						</tr>
-					</table>
-					<?php submit_button( __( 'Pair with Plugsent', 'plugsent-connector' ) ); ?>
-				</form>
+								value="<?php echo esc_attr( (string) get_option( self::OPTION_SERVER ) ); ?>" />
+						</div>
+						<div class="plugsent-field">
+							<label for="plugsent_code"><?php esc_html_e( 'Pairing code', 'plugsent-connector' ); ?></label>
+							<input type="text" id="plugsent_code" name="plugsent_code" class="regular-text code" required
+								placeholder="PLSG-XXXXXXXXXXXX" />
+							<p class="plugsent-note"><?php esc_html_e( 'Codes expire after 15 minutes and work once.', 'plugsent-connector' ); ?></p>
+						</div>
+						<?php submit_button( __( 'Pair with Plugsent', 'plugsent-connector' ), 'primary', 'submit', false ); ?>
+					</form>
+				</div>
 			<?php endif; ?>
 		</div>
 		<?php
@@ -267,6 +286,35 @@ class Plugsent_Connector {
 			return;
 		}
 
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 120 );
+		}
+		ignore_user_abort( true );
+
+		$start = time();
+
+		do {
+			$activity = self::poll_once();
+
+			if ( ! self::is_connected() ) {
+				return;
+			}
+		} while ( $activity && ( time() - $start ) < 45 );
+
+		// Chain a follow-up run shortly after this request ends so the gap
+		// between check-ins stays small (throttled to prevent pile-ups).
+		if ( ! get_transient( 'plugsent_chain_lock' ) ) {
+			set_transient( 'plugsent_chain_lock', 1, 30 );
+			wp_schedule_single_event( time() + 5, self::CRON_HOOK );
+			spawn_cron( time() + 5 );
+		}
+	}
+
+	/**
+	 * One outbound cycle: poll for commands, execute them, report results.
+	 * Returns true when any command was handled (i.e. there was activity).
+	 */
+	private static function poll_once() {
 		$response = self::signed_request(
 			'poll',
 			array(
@@ -278,7 +326,7 @@ class Plugsent_Connector {
 		);
 
 		if ( is_wp_error( $response ) ) {
-			return;
+			return false;
 		}
 
 		$status = (int) wp_remote_retrieve_response_code( $response );
@@ -287,11 +335,11 @@ class Plugsent_Connector {
 			// The platform revoked us; drop credentials and stop checking in.
 			self::forget_credentials();
 			update_option( self::OPTION_STATUS, 'revoked' );
-			return;
+			return false;
 		}
 
 		if ( 200 !== $status ) {
-			return;
+			return false;
 		}
 
 		update_option( self::OPTION_LAST_SYNC, time() );
@@ -343,6 +391,8 @@ class Plugsent_Connector {
 		if ( ! empty( $results ) ) {
 			self::signed_request( 'results', array( 'results' => $results ) );
 		}
+
+		return ! empty( $results );
 	}
 
 	/**
@@ -520,7 +570,7 @@ class Plugsent_Connector {
 		return wp_remote_post(
 			$url,
 			array(
-				'timeout' => 15,
+				'timeout' => 45,
 				'headers' => $headers,
 				'body'    => $body,
 			)

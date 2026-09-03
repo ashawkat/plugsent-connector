@@ -211,7 +211,7 @@ class Plugsent_Connector {
 			'name'         => get_bloginfo( 'name' ),
 			'wp_version'   => get_bloginfo( 'version' ),
 			'php_version'  => PHP_VERSION,
-			'capabilities' => array( 'inventory.get' ),
+			'capabilities' => array( 'inventory.get', 'update.run' ),
 		);
 
 		$response = self::http_post( $server . '/connector/v1/pair', $body );
@@ -272,7 +272,7 @@ class Plugsent_Connector {
 			array(
 				'wp_version'   => get_bloginfo( 'version' ),
 				'php_version'  => PHP_VERSION,
-				'capabilities' => array( 'inventory.get' ),
+				'capabilities' => array( 'inventory.get', 'update.run' ),
 				'health'       => array( 'status' => 'ok' ),
 			)
 		);
@@ -320,12 +320,97 @@ class Plugsent_Connector {
 				continue;
 			}
 
+			if ( 'update.run' === $type ) {
+				$payload = isset( $command['payload'] ) && is_array( $command['payload'] ) ? $command['payload'] : array();
+				try {
+					$results[] = array(
+						'id'     => $id,
+						'status' => 'ok',
+						'data'   => array( 'update' => self::command_update_run( $payload ) ),
+					);
+				} catch ( Exception $e ) {
+					$results[] = array( 'id' => $id, 'status' => 'failed', 'error' => $e->getMessage() );
+				}
+				continue;
+			}
+
 			$results[] = array( 'id' => $id, 'status' => 'failed', 'error' => 'unsupported_command' );
 		}
 
 		if ( ! empty( $results ) ) {
 			self::signed_request( 'results', array( 'results' => $results ) );
 		}
+	}
+
+	/**
+	 * Update a single plugin, theme, or WordPress core.
+	 *
+	 * @param array $payload {context: plugin|theme|core, slug: string}
+	 * @return array{context: string, slug: string, ok: bool, message: string, version: string|null}
+	 */
+	private static function command_update_run( $payload ) {
+		$context = isset( $payload['context'] ) ? sanitize_key( $payload['context'] ) : '';
+		$slug    = isset( $payload['slug'] ) ? sanitize_text_field( $payload['slug'] ) : '';
+
+		if (! function_exists( 'get_plugins' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		}
+		if (! function_exists( 'get_plugin_updates' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/update.php';
+		}
+		if (! class_exists( 'WP_Upgrader' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+		}
+
+		if ( 'plugin' === $context ) {
+			$target = null;
+			$before = null;
+			foreach ( (array) get_plugins() as $file => $info ) {
+				$candidate = dirname( $file ) !== '.' ? dirname( $file ) : sanitize_title( $info['Name'] );
+				if ( $candidate === $slug ) {
+					$target = $file;
+					$before = $info['Version'];
+					break;
+				}
+			}
+			if ( null === $target ) {
+				return array( 'context' => $context, 'slug' => $slug, 'ok' => false, 'message' => 'Plugin not found.', 'version' => null );
+			}
+			$upgrader = new Plugin_Upgrader( new Automatic_Upgrader_Skin() );
+			$result   = $upgrader->upgrade( $target );
+			$plugins  = (array) get_plugins();
+			$after    = isset( $plugins[ $target ]['Version'] ) ? $plugins[ $target ]['Version'] : null;
+			if ( is_wp_error( $result ) ) {
+				return array( 'context' => $context, 'slug' => $slug, 'ok' => false, 'message' => $result->get_error_message(), 'version' => $after );
+			}
+			$changed = ( null !== $after && $after !== $before );
+			return array( 'context' => $context, 'slug' => $slug, 'ok' => true, 'message' => $changed ? 'Updated.' : 'No update was applied (possibly already up to date).', 'version' => $after );
+		}
+
+		if ( 'theme' === $context ) {
+			if ( null === wp_get_theme( $slug )->get( 'Version' ) && ! wp_get_theme( $slug )->exists() ) {
+				return array( 'context' => $context, 'slug' => $slug, 'ok' => false, 'message' => 'Theme not found.', 'version' => null );
+			}
+			$upgrader = new Theme_Upgrader( new Automatic_Upgrader_Skin() );
+			$result   = $upgrader->upgrade( $slug );
+			$after    = wp_get_theme( $slug )->get( 'Version' );
+			if ( is_wp_error( $result ) ) {
+				return array( 'context' => $context, 'slug' => $slug, 'ok' => false, 'message' => $result->get_error_message(), 'version' => $after );
+			}
+			return array( 'context' => $context, 'slug' => $slug, 'ok' => true, 'message' => 'Updated.', 'version' => $after );
+		}
+
+		if ( 'core' === $context ) {
+			$before = get_bloginfo( 'version' );
+			$upgrader = new Core_Upgrader( new Automatic_Upgrader_Skin() );
+			$result   = $upgrader->upgrade();
+			if ( is_wp_error( $result ) ) {
+				return array( 'context' => $context, 'slug' => 'wordpress', 'ok' => false, 'message' => $result->get_error_message(), 'version' => $before );
+			}
+			return array( 'context' => $context, 'slug' => 'wordpress', 'ok' => true, 'message' => 'Core update processed.', 'version' => get_bloginfo( 'version' ) );
+		}
+
+		return array( 'context' => $context, 'slug' => $slug, 'ok' => false, 'message' => 'Unknown update context.', 'version' => null );
 	}
 
 	/**

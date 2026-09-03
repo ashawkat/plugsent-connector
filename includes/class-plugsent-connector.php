@@ -347,6 +347,8 @@ class Plugsent_Connector {
 		$payload = json_decode( (string) wp_remote_retrieve_body( $response ), true );
 		$results = array();
 
+		$handled = false;
+
 		foreach ( (array) ( $payload['commands'] ?? array() ) as $command ) {
 			$id   = isset( $command['id'] ) ? (int) $command['id'] : 0;
 			// NOTE: do not sanitize_key() the type - it strips dots and
@@ -360,39 +362,53 @@ class Plugsent_Connector {
 
 			if ( 'inventory.get' === $type ) {
 				try {
-					$results[] = array(
-						'id'     => $id,
-						'status' => 'ok',
-						'data'   => array( 'inventory' => self::command_inventory_get() ),
+					self::signed_request(
+						'results',
+						array( 'results' => array( array(
+							'id'     => $id,
+							'status' => 'ok',
+							'data'   => array( 'inventory' => self::command_inventory_get() ),
+						) ) )
 					);
 				} catch ( Exception $e ) {
-					$results[] = array( 'id' => $id, 'status' => 'failed', 'error' => $e->getMessage() );
+					self::signed_request(
+						'results',
+						array( 'results' => array( array( 'id' => $id, 'status' => 'failed', 'error' => $e->getMessage() ) ) )
+					);
 				}
+				$handled = true;
 				continue;
 			}
 
 			if ( 'update.run' === $type ) {
 				$payload = isset( $command['payload'] ) && is_array( $command['payload'] ) ? $command['payload'] : array();
 				try {
-					$results[] = array(
-						'id'     => $id,
-						'status' => 'ok',
-						'data'   => array( 'update' => self::command_update_run( $payload ) ),
+					self::signed_request(
+						'results',
+						array( 'results' => array( array(
+							'id'     => $id,
+							'status' => 'ok',
+							'data'   => array( 'update' => self::command_update_run( $payload ) ),
+						) ) )
 					);
 				} catch ( Exception $e ) {
-					$results[] = array( 'id' => $id, 'status' => 'failed', 'error' => $e->getMessage() );
+					self::signed_request(
+						'results',
+						array( 'results' => array( array( 'id' => $id, 'status' => 'failed', 'error' => $e->getMessage() ) ) )
+					);
 				}
+				$handled = true;
 				continue;
 			}
 
-			$results[] = array( 'id' => $id, 'status' => 'failed', 'error' => 'unsupported_command' );
+			self::signed_request(
+				'results',
+				array( 'results' => array( array( 'id' => $id, 'status' => 'failed', 'error' => 'unsupported_command' ) ) )
+			);
+			$handled = true;
 		}
 
-		if ( ! empty( $results ) ) {
-			self::signed_request( 'results', array( 'results' => $results ) );
-		}
-
-		return ! empty( $results );
+		return $handled;
 	}
 
 	/**

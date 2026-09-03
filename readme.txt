@@ -4,7 +4,7 @@ Tags: management, updates, inventory, monitoring
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 0.3.1
+Stable tag: 0.4.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,9 @@ https://github.com/plugsent/plugsent
 2. A connected site reporting its inventory (shown in the Plugsent dashboard).
 
 == Changelog ==
+
+= 0.4.0 =
+* Live progress: command results are reported one by one as they finish, so the dashboard shows step-by-step progress during batch updates.
 
 = 0.3.1 =
 * Fix: update results are now verified by comparing versions - failed theme updates are no longer reported as successful.

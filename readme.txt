@@ -4,7 +4,7 @@ Tags: management, updates, inventory, monitoring
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 0.2.2
+Stable tag: 0.2.3
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,9 @@ https://github.com/plugsent/plugsent
 2. A connected site reporting its inventory (shown in the Plugsent dashboard).
 
 == Changelog ==
+
+= 0.2.3 =
+* Fix: theme update data is stored as an array by WordPress - read new_version with array access (theme updates were missed in 0.2.2).
 
 = 0.2.2 =
 * Fix: theme update availability was never detected (wrong lookup key in get_theme_updates).

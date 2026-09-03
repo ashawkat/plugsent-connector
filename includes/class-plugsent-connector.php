@@ -451,8 +451,11 @@ class Plugsent_Connector {
 		$active_theme = get_stylesheet();
 		foreach ( wp_get_themes() as $slug => $theme ) {
 			$update_version = null;
-			if ( isset( $theme_updates[ $slug ]->update->new_version ) ) {
-				$update_version = $theme_updates[ $slug ]->update->new_version;
+			$update = $theme_updates[ $slug ]->update ?? null;
+			if ( is_array( $update ) && isset( $update['new_version'] ) ) {
+				$update_version = $update['new_version'];
+			} elseif ( is_object( $update ) && isset( $update->new_version ) ) {
+				$update_version = $update->new_version;
 			}
 			$themes[] = array(
 				'slug'             => $slug,

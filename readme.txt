@@ -1,0 +1,76 @@
+=== Plugsent Connector ===
+Contributors: adnanshawkat, betatech
+Tags: management, updates, inventory, monitoring
+Requires at least: 6.0
+Tested up to: 6.8
+Requires PHP: 7.4
+Stable tag: 0.1.0
+License: GPL-2.0-or-later
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
+
+Connects this WordPress site to your self-hosted Plugsent control plane.
+
+== Description ==
+
+Plugsent is an open-source WordPress fleet manager: plugin/theme/core inventory,
+safe updates, uptime and vulnerability monitoring, organized by workspace,
+project, and team.
+
+This plugin is the site-side connector. It is outbound-only: the site polls your
+Plugsent server for signed commands, so it works behind firewalls and staging
+auth with no inbound ports. Every request is HMAC-signed (protocol v1) and never
+requires your WordPress admin password.
+
+= Getting started =
+
+1. In your Plugsent dashboard open "Connect site" and fill in this site's URL.
+2. Install this plugin, then open Settings → Plugsent Connector.
+3. Paste the Server URL and the 15-minute pairing code. Done — the plugin checks
+   in every minute and reports its full plugin/theme/core inventory.
+
+== Installation ==
+
+1. Upload the `plugsent-connector` folder to the `/wp-content/plugins/`
+   directory, or install the ZIP via Plugins → Add New → Upload Plugin.
+2. Activate the plugin through the Plugins screen.
+3. Go to Settings → Plugsent Connector and paste the Server URL and pairing
+   code from your Plugsent dashboard ("Connect site" page).
+4. The site checks in within a minute; its status in Plugsent flips to
+   Connected automatically.
+
+== Frequently Asked Questions ==
+
+= Does this work behind a firewall or staging authentication? =
+
+Yes. The connector is outbound-only: it calls your Plugsent server, never the
+other way around. No inbound ports or firewall rules are needed.
+
+= Does it need my WordPress admin password? =
+
+No. Pairing uses a one-time code, after which every request is signed with a
+per-site key pair. Revoke access from the Plugsent dashboard at any time.
+
+= What data does it send? =
+
+Site name and URL, WordPress and PHP versions, and the plugin/theme inventory
+(name, version, active state, available updates). No posts, users, or content.
+
+= Where can I get a Plugsent server? =
+
+Plugsent is open source and self-hosted: run it with one command from
+https://github.com/plugsent/plugsent
+
+== Screenshots ==
+
+1. The pairing screen under Settings → Plugsent Connector.
+2. A connected site reporting its inventory (shown in the Plugsent dashboard).
+
+== Changelog ==
+
+= 0.1.0 =
+* Initial release: pairing, signed poll loop, inventory.get command.
+
+== Upgrade Notice ==
+
+= 0.1.0 =
+Initial release.

@@ -17,7 +17,7 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
-define('PLUGSENT_CONNECTOR_VERSION', '0.2.1'));
+define('PLUGSENT_CONNECTOR_VERSION', '0.2.1');
 define('PLUGSENT_CONNECTOR_FILE', __FILE__);
 
 require_once __DIR__ . '/includes/class-plugsent-signer.php';

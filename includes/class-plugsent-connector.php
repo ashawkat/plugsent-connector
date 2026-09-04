@@ -273,7 +273,15 @@ class Plugsent_Connector
             'name' => get_bloginfo('name'),
             'wp_version' => get_bloginfo('version'),
             'php_version' => PHP_VERSION,
-            'capabilities' => ['inventory.get', 'update.run'],
+            'capabilities' => [
+                'inventory.get',
+                'update.run',
+                'plugin.activate',
+                'plugin.deactivate',
+                'plugin.delete',
+                'theme.activate',
+                'theme.delete',
+            ],
         ];
 
         $response = self::http_post($server.'/connector/v1/pair', $body);
@@ -373,7 +381,16 @@ class Plugsent_Connector
                 'php_version' => PHP_VERSION,
                 'version' => PLUGSENT_CONNECTOR_VERSION,
                 'wait' => 25,
-                'capabilities' => ['inventory.get', 'update.run', 'admin.login'],
+                'capabilities' => [
+                    'inventory.get',
+                    'update.run',
+                    'admin.login',
+                    'plugin.activate',
+                    'plugin.deactivate',
+                    'plugin.delete',
+                    'theme.activate',
+                    'theme.delete',
+                ],
                 'health' => ['status' => 'ok'],
             ]
         );
@@ -478,6 +495,34 @@ class Plugsent_Connector
                 continue;
             }
 
+            if (
+                $type === 'plugin.activate'
+                || $type === 'plugin.deactivate'
+                || $type === 'plugin.delete'
+                || $type === 'theme.activate'
+                || $type === 'theme.delete'
+            ) {
+                $payload = isset($command['payload']) && is_array($command['payload']) ? $command['payload'] : [];
+                try {
+                    self::signed_request(
+                        'results',
+                        ['results' => [[
+                            'id' => $id,
+                            'status' => 'ok',
+                            'data' => ['action' => self::command_manage_item($type, $payload)],
+                        ]]]
+                    );
+                } catch (Exception $e) {
+                    self::signed_request(
+                        'results',
+                        ['results' => [['id' => $id, 'status' => 'failed', 'error' => $e->getMessage()]]]
+                    );
+                }
+                $handled = true;
+
+                continue;
+            }
+
             self::signed_request(
                 'results',
                 ['results' => [['id' => $id, 'status' => 'failed', 'error' => 'unsupported_command']]]
@@ -510,19 +555,12 @@ class Plugsent_Connector
         }
 
         if ($context === 'plugin') {
-            $target = null;
-            $before = null;
-            foreach ((array) get_plugins() as $file => $info) {
-                $candidate = dirname($file) !== '.' ? dirname($file) : sanitize_title($info['Name']);
-                if ($candidate === $slug) {
-                    $target = $file;
-                    $before = $info['Version'];
-                    break;
-                }
-            }
+            $target = self::resolve_plugin_file($slug);
             if ($target === null) {
                 return ['context' => $context, 'slug' => $slug, 'ok' => false, 'message' => 'Plugin not found.', 'version' => null];
             }
+            $plugins = (array) get_plugins();
+            $before = isset($plugins[$target]['Version']) ? $plugins[$target]['Version'] : null;
             $upgrader = new Plugin_Upgrader(new Automatic_Upgrader_Skin);
             $result = $upgrader->upgrade($target);
             $plugins = (array) get_plugins();
@@ -564,6 +602,132 @@ class Plugsent_Connector
     }
 
     /**
+     * Resolve an inventory slug (e.g. `akismet`) to its plugin file path
+     * (`akismet/akismet.php`) using the same rule as the platform inventory:
+     * the directory name, or the sanitized title for single-file plugins.
+     *
+     * @return string|null
+     */
+    private static function resolve_plugin_file($slug)
+    {
+        if (! function_exists('get_plugins')) {
+            require_once ABSPATH.'wp-admin/includes/plugin.php';
+        }
+
+        foreach ((array) get_plugins() as $file => $info) {
+            $candidate = dirname($file) !== '.' ? dirname($file) : sanitize_title($info['Name']);
+            if ($candidate === $slug) {
+                return $file;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Activate, deactivate, delete, or switch a plugin/theme on this site.
+     * The connector itself is off-limits: losing it means losing the site.
+     *
+     * @param  string  $type  plugin.activate|plugin.deactivate|plugin.delete|theme.activate|theme.delete
+     * @param  array  $payload  {slug: string}
+     * @return array{context: string, slug: string, ok: bool, message: string}
+     */
+    private static function command_manage_item($type, $payload)
+    {
+        [$context, $action] = explode('.', $type, 2);
+        $slug = isset($payload['slug']) ? sanitize_text_field($payload['slug']) : '';
+
+        if ($slug === '') {
+            return ['context' => $context, 'slug' => $slug, 'ok' => false, 'message' => 'No slug was provided.'];
+        }
+
+        if ($slug === 'plugsent-connector') {
+            return ['context' => $context, 'slug' => $slug, 'ok' => false, 'message' => 'The Plugsent connector cannot be managed remotely.'];
+        }
+
+        if ($context === 'plugin') {
+            if (! function_exists('delete_plugins')) {
+                require_once ABSPATH.'wp-admin/includes/plugin.php';
+            }
+
+            $target = self::resolve_plugin_file($slug);
+            if ($target === null) {
+                return ['context' => $context, 'slug' => $slug, 'ok' => false, 'message' => 'Plugin not found.'];
+            }
+
+            $active_plugins = (array) get_option('active_plugins', []);
+
+            if ($action === 'activate') {
+                if (in_array($target, $active_plugins, true)) {
+                    return ['context' => $context, 'slug' => $slug, 'ok' => true, 'message' => 'Plugin is already active.'];
+                }
+                $result = activate_plugin($target);
+                if (is_wp_error($result)) {
+                    return ['context' => $context, 'slug' => $slug, 'ok' => false, 'message' => $result->get_error_message()];
+                }
+
+                return ['context' => $context, 'slug' => $slug, 'ok' => true, 'message' => 'Activated.'];
+            }
+
+            if ($action === 'deactivate') {
+                if (! in_array($target, $active_plugins, true)) {
+                    return ['context' => $context, 'slug' => $slug, 'ok' => true, 'message' => 'Plugin is already inactive.'];
+                }
+                deactivate_plugins($target);
+                $still_active = in_array($target, (array) get_option('active_plugins', []), true);
+                if ($still_active) {
+                    return ['context' => $context, 'slug' => $slug, 'ok' => false, 'message' => 'Plugin could not be deactivated.'];
+                }
+
+                return ['context' => $context, 'slug' => $slug, 'ok' => true, 'message' => 'Deactivated.'];
+            }
+
+            if (in_array($target, $active_plugins, true)) {
+                return ['context' => $context, 'slug' => $slug, 'ok' => false, 'message' => 'Deactivate the plugin before deleting it.'];
+            }
+            $result = delete_plugins([$target]);
+            if (is_wp_error($result) || $result === false) {
+                $message = is_wp_error($result) ? $result->get_error_message() : 'WordPress refused to delete the plugin.';
+
+                return ['context' => $context, 'slug' => $slug, 'ok' => false, 'message' => $message];
+            }
+
+            return ['context' => $context, 'slug' => $slug, 'ok' => true, 'message' => 'Deleted.'];
+        }
+
+        if ($context === 'theme') {
+            $theme = wp_get_theme($slug);
+            if (! $theme->exists()) {
+                return ['context' => $context, 'slug' => $slug, 'ok' => false, 'message' => 'Theme not found.'];
+            }
+
+            if ($action === 'activate') {
+                if (get_stylesheet() === $slug) {
+                    return ['context' => $context, 'slug' => $slug, 'ok' => true, 'message' => 'Theme is already active.'];
+                }
+                switch_theme($slug);
+
+                return ['context' => $context, 'slug' => $slug, 'ok' => get_stylesheet() === $slug, 'message' => 'Activated.'];
+            }
+
+            if (get_stylesheet() === $slug) {
+                return ['context' => $context, 'slug' => $slug, 'ok' => false, 'message' => 'The active theme cannot be deleted.'];
+            }
+            if (! function_exists('delete_theme')) {
+                require_once ABSPATH.'wp-admin/includes/theme.php';
+            }
+            $result = delete_theme($slug);
+            if (is_wp_error($result)) {
+                return ['context' => $context, 'slug' => $slug, 'ok' => false, 'message' => $result->get_error_message()];
+            }
+
+            return ['context' => $context, 'slug' => $slug, 'ok' => true, 'message' => 'Deleted.'];
+        }
+
+        return ['context' => $context, 'slug' => $slug, 'ok' => false, 'message' => 'Unknown management action.'];
+    }
+
+    /**
      * Create a single-use magic login URL for the paired admin user.
      *
      * @return array{url: string, user: string, expires_in: int}
@@ -584,12 +748,20 @@ class Plugsent_Connector
         }
 
         $token = bin2hex(random_bytes(32));
-        set_transient('plugsent_login_'.hash('sha256', $token), $user->user_login, 120);
+
+        // DB-backed option, NOT a transient: on sites with Redis/Memcached
+        // object caches, expiring transients are volatile and a login token
+        // must never evaporate before use.
+        update_option('plugsent_login_token', [
+            'hash' => hash('sha256', $token),
+            'user' => $user->user_login,
+            'expires' => time() + 300,
+        ], false);
 
         return [
             'url' => add_query_arg('plugsent_login', $token, wp_login_url()),
             'user' => $user->user_login,
-            'expires_in' => 120,
+            'expires_in' => 300,
         ];
     }
 
@@ -604,16 +776,26 @@ class Plugsent_Connector
         if ($token === '') {
             return;
         }
-        $key = 'plugsent_login_'.hash('sha256', $token);
-        $login = get_transient($key);
+        // DB-backed lookup: options survive object-cache eviction and flushes,
+        // unlike transients on sites with Redis/Memcached.
+        $stored = get_option('plugsent_login_token');
 
-        if (! $login) {
+        if (! is_array($stored) || empty($stored['hash'])) {
+            wp_die(esc_html__('No pending Plugsent login link was found. Generate a new one from the dashboard.', 'plugsent-connector'), '', ['response' => 403]);
+        }
+
+        if (! hash_equals($stored['hash'], hash('sha256', $token))) {
+            wp_die(esc_html__('This Plugsent login link was already used or is invalid. Generate a new one from the dashboard.', 'plugsent-connector'), '', ['response' => 403]);
+        }
+
+        if (time() > (int) $stored['expires']) {
+            delete_option('plugsent_login_token');
             wp_die(esc_html__('This Plugsent login link has expired. Generate a new one from the dashboard.', 'plugsent-connector'), '', ['response' => 403]);
         }
 
-        delete_transient($key);
+        delete_option('plugsent_login_token');
 
-        $user = get_user_by('login', $login);
+        $user = get_user_by('login', $stored['user']);
 
         if (! $user) {
             wp_die(esc_html__('The paired admin user no longer exists on this site.', 'plugsent-connector'), '', ['response' => 403]);

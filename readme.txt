@@ -4,7 +4,7 @@ Tags: management, updates, inventory, monitoring
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 0.9.1
+Stable tag: 0.11.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,13 @@ https://github.com/plugsent/plugsent
 2. A connected site reporting its inventory (shown in the Plugsent dashboard).
 
 == Changelog ==
+
+= 0.11.0 =
+* New: remote plugin management - the dashboard can activate, deactivate, or delete a plugin (the connector itself can never be managed remotely).
+* New: remote theme management - switch the active theme or delete an inactive one.
+
+= 0.10.0 =
+* Fix: login tokens are now stored in the database instead of transients - on sites with Redis/Memcached object caches, transient-based tokens could vanish before use (the "link has expired" issue).
 
 = 0.9.1 =
 * Login tokens now live for 5 minutes (was 2) - friendlier for slow WP-Cron hosts.

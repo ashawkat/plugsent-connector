@@ -4,7 +4,7 @@ Tags: management, updates, inventory, monitoring
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 0.11.0
+Stable tag: 0.11.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,10 @@ https://github.com/plugsent/plugsent
 2. A connected site reporting its inventory (shown in the Plugsent dashboard).
 
 == Changelog ==
+
+= 0.11.1 =
+* Fix: plugin/theme deletion failed silently on WP-Cron check-ins - the filesystem API helpers were not loaded outside wp-admin. Deletes now load them explicitly.
+* Fix: if PHP ever dies mid-command, the connector now reports the command as failed (with the fatal message) instead of leaving it running forever on the dashboard.
 
 = 0.11.0 =
 * New: remote plugin management - the dashboard can activate, deactivate, or delete a plugin (the connector itself can never be managed remotely).

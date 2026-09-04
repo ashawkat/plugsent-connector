@@ -24,6 +24,59 @@ class Plugsent_Connector
     const PAGE_SLUG = 'plugsent-connector';
 
     /**
+     * Command ids whose result was already reported during this request.
+     * The fatal shutdown handler uses this to avoid double-reporting.
+     *
+     * @var array<int, bool>
+     */
+    private static $answered_commands = [];
+
+    /**
+     * Post one command result and remember it was answered.
+     */
+    private static function post_result($id, $status, ?array $data = null, ?string $error = null)
+    {
+        $result = ['id' => $id, 'status' => $status];
+
+        if ($data !== null) {
+            $result['data'] = $data;
+        }
+        if ($error !== null) {
+            $result['error'] = $error;
+        }
+
+        self::signed_request('results', ['results' => [$result]]);
+        self::$answered_commands[$id] = true;
+    }
+
+    /**
+     * Register a shutdown handler that reports a delivered command as
+     * failed if PHP dies mid-execution (an undefined admin include on a
+     * WP-Cron request, a memory limit, ...). Without this, a fatal would
+     * leave the command wedged in the platform as eternally running.
+     */
+    private static function guard_against_fatal($id)
+    {
+        register_shutdown_function(static function () use ($id): void {
+            if (! empty(self::$answered_commands[$id])) {
+                return;
+            }
+
+            $error = error_get_last();
+
+            if (! is_array($error) || ! in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+                return;
+            }
+
+            self::signed_request('results', ['results' => [[
+                'id' => $id,
+                'status' => 'failed',
+                'error' => 'PHP fatal while running the command: '.$error['message'].' ('.basename((string) $error['file']).':'.$error['line'].')',
+            ]]]);
+        });
+    }
+
+    /**
      * Parse a connection string from the dashboard: "server::credential".
      *
      * @return array{0: string, 1: string}|null [server, credential] or null when invalid.
@@ -431,21 +484,16 @@ class Plugsent_Connector
                 continue;
             }
 
+            // Guarantee an answer: if anything below fatals mid-command,
+            // the shutdown handler reports it as failed so the platform
+            // never shows a command as eternally running.
+            self::guard_against_fatal($id);
+
             if ($type === 'inventory.get') {
                 try {
-                    self::signed_request(
-                        'results',
-                        ['results' => [[
-                            'id' => $id,
-                            'status' => 'ok',
-                            'data' => ['inventory' => self::command_inventory_get()],
-                        ]]]
-                    );
+                    self::post_result($id, 'ok', ['inventory' => self::command_inventory_get()]);
                 } catch (Exception $e) {
-                    self::signed_request(
-                        'results',
-                        ['results' => [['id' => $id, 'status' => 'failed', 'error' => $e->getMessage()]]]
-                    );
+                    self::post_result($id, 'failed', null, $e->getMessage());
                 }
                 $handled = true;
 
@@ -454,19 +502,9 @@ class Plugsent_Connector
 
             if ($type === 'admin.login') {
                 try {
-                    self::signed_request(
-                        'results',
-                        ['results' => [[
-                            'id' => $id,
-                            'status' => 'ok',
-                            'data' => ['admin_login' => self::command_admin_login()],
-                        ]]]
-                    );
+                    self::post_result($id, 'ok', ['admin_login' => self::command_admin_login()]);
                 } catch (Exception $e) {
-                    self::signed_request(
-                        'results',
-                        ['results' => [['id' => $id, 'status' => 'failed', 'error' => $e->getMessage()]]]
-                    );
+                    self::post_result($id, 'failed', null, $e->getMessage());
                 }
                 $handled = true;
 
@@ -476,19 +514,9 @@ class Plugsent_Connector
             if ($type === 'update.run') {
                 $payload = isset($command['payload']) && is_array($command['payload']) ? $command['payload'] : [];
                 try {
-                    self::signed_request(
-                        'results',
-                        ['results' => [[
-                            'id' => $id,
-                            'status' => 'ok',
-                            'data' => ['update' => self::command_update_run($payload)],
-                        ]]]
-                    );
+                    self::post_result($id, 'ok', ['update' => self::command_update_run($payload)]);
                 } catch (Exception $e) {
-                    self::signed_request(
-                        'results',
-                        ['results' => [['id' => $id, 'status' => 'failed', 'error' => $e->getMessage()]]]
-                    );
+                    self::post_result($id, 'failed', null, $e->getMessage());
                 }
                 $handled = true;
 
@@ -504,29 +532,16 @@ class Plugsent_Connector
             ) {
                 $payload = isset($command['payload']) && is_array($command['payload']) ? $command['payload'] : [];
                 try {
-                    self::signed_request(
-                        'results',
-                        ['results' => [[
-                            'id' => $id,
-                            'status' => 'ok',
-                            'data' => ['action' => self::command_manage_item($type, $payload)],
-                        ]]]
-                    );
+                    self::post_result($id, 'ok', ['action' => self::command_manage_item($type, $payload)]);
                 } catch (Exception $e) {
-                    self::signed_request(
-                        'results',
-                        ['results' => [['id' => $id, 'status' => 'failed', 'error' => $e->getMessage()]]]
-                    );
+                    self::post_result($id, 'failed', null, $e->getMessage());
                 }
                 $handled = true;
 
                 continue;
             }
 
-            self::signed_request(
-                'results',
-                ['results' => [['id' => $id, 'status' => 'failed', 'error' => 'unsupported_command']]]
-            );
+            self::post_result($id, 'failed', null, 'unsupported_command');
             $handled = true;
         }
 
@@ -643,6 +658,13 @@ class Plugsent_Connector
 
         if ($slug === 'plugsent-connector') {
             return ['context' => $context, 'slug' => $slug, 'ok' => false, 'message' => 'The Plugsent connector cannot be managed remotely.'];
+        }
+
+        // Deletes go through WordPress's filesystem API, whose credential
+        // helpers (request_filesystem_credentials, WP_Filesystem) live in
+        // file.php - which is NOT loaded on WP-Cron requests.
+        if (! function_exists('request_filesystem_credentials')) {
+            require_once ABSPATH.'wp-admin/includes/file.php';
         }
 
         if ($context === 'plugin') {

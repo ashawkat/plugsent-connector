@@ -365,7 +365,9 @@ class Plugsent_Connector
             [
                 'wp_version' => get_bloginfo('version'),
                 'php_version' => PHP_VERSION,
-                'capabilities' => ['inventory.get', 'update.run'],
+                'version' => PLUGSENT_CONNECTOR_VERSION,
+                'wait' => 25,
+                'capabilities' => ['inventory.get', 'update.run', 'admin.login'],
                 'health' => ['status' => 'ok'],
             ]
         );

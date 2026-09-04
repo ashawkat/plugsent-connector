@@ -31,7 +31,7 @@ class Plugsent_Connector
     {
         $raw = trim((string) $raw);
 
-        if ('' === $raw || ! str_contains($raw, '::')) {
+        if ($raw === '' || ! str_contains($raw, '::')) {
             return null;
         }
 
@@ -39,7 +39,7 @@ class Plugsent_Connector
         $server = rtrim(trim($parts[0]), '/');
         $credential = trim($parts[1]);
 
-        if ('' === $server || '' === $credential) {
+        if ($server === '' || $credential === '') {
             return null;
         }
 
@@ -252,7 +252,7 @@ class Plugsent_Connector
         $raw = sanitize_text_field(wp_unslash($_POST['plugsent_connection'] ?? ''));
         $parsed = self::parse_connection_string($raw);
 
-        if (null === $parsed) {
+        if ($parsed === null) {
             self::redirect('bad_code');
         }
 

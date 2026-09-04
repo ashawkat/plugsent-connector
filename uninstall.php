@@ -1,10 +1,8 @@
 <?php
+
 /**
  * Remove all plugin data on uninstall.
- *
- * @package Plugsent_Connector
  */
-
 if (! defined('WP_UNINSTALL_PLUGIN')) {
     exit;
 }

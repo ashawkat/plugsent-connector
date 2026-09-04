@@ -4,7 +4,7 @@ Tags: management, updates, inventory, monitoring
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 0.9.0
+Stable tag: 0.9.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,9 @@ https://github.com/plugsent/plugsent
 2. A connected site reporting its inventory (shown in the Plugsent dashboard).
 
 == Changelog ==
+
+= 0.9.1 =
+* Login tokens now live for 5 minutes (was 2) - friendlier for slow WP-Cron hosts.
 
 = 0.9.0 =
 * New: admin.login command - the Plugsent dashboard can generate a single-use, 120-second magic login into wp-admin for the paired admin user.

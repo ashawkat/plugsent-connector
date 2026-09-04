@@ -4,7 +4,7 @@ Tags: management, updates, inventory, monitoring
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 0.4.1
+Stable tag: 0.5.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,9 @@ https://github.com/plugsent/plugsent
 2. A connected site reporting its inventory (shown in the Plugsent dashboard).
 
 == Changelog ==
+
+= 0.5.0 =
+* Simpler pairing: paste a single connection string (server + key combined) - no separate server URL field.
 
 = 0.4.1 =
 * New: pair using the site's stable API key from the Plugsent dashboard (no 15-minute rush).

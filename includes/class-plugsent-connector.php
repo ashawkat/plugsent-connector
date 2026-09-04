@@ -22,6 +22,30 @@ class Plugsent_Connector
 
     const PAGE_SLUG = 'plugsent-connector';
 
+    /**
+     * Parse a connection string from the dashboard: "server::credential".
+     *
+     * @return array{0: string, 1: string}|null [server, credential] or null when invalid.
+     */
+    public static function parse_connection_string($raw)
+    {
+        $raw = trim((string) $raw);
+
+        if ('' === $raw || ! str_contains($raw, '::')) {
+            return null;
+        }
+
+        $parts = explode('::', $raw, 2);
+        $server = rtrim(trim($parts[0]), '/');
+        $credential = trim($parts[1]);
+
+        if ('' === $server || '' === $credential) {
+            return null;
+        }
+
+        return [$server, $credential];
+    }
+
     public static function init()
     {
         // Register the custom cron interval at plugin load (not on `init`) so it
@@ -204,16 +228,10 @@ class Plugsent_Connector
 						<input type="hidden" name="action" value="plugsent_pair" />
 						<?php wp_nonce_field('plugsent_pair'); ?>
 						<div class="plugsent-field">
-							<label for="plugsent_server"><?php esc_html_e('Plugsent server URL', 'plugsent-connector'); ?></label>
-							<input type="url" id="plugsent_server" name="plugsent_server" class="regular-text code" required
-								placeholder="https://plugsent.example.com"
-								value="<?php echo esc_attr((string) get_option(self::OPTION_SERVER)); ?>" />
-						</div>
-						<div class="plugsent-field">
-							<label for="plugsent_code"><?php esc_html_e('Pairing code or API key', 'plugsent-connector'); ?></label>
-							<input type="text" id="plugsent_code" name="plugsent_code" class="regular-text code" required
-								placeholder="PLSG-XXXXXXXXXXXX or plsk_…" />
-							<p class="plugsent-note"><?php esc_html_e('Codes expire after 15 minutes and work once.', 'plugsent-connector'); ?></p>
+							<label for="plugsent_connection"><?php esc_html_e('Connection string', 'plugsent-connector'); ?></label>
+							<input type="text" id="plugsent_connection" name="plugsent_connection" class="regular-text code" required
+								placeholder="https://plugsent.example.com::PLSG-XXXXXXXXXXXX" />
+							<p class="plugsent-note"><?php esc_html_e('One single string — copy it from the Plugsent dashboard (Connect site → Copy connection string).', 'plugsent-connector'); ?></p>
 						</div>
 						<?php submit_button(__('Pair with Plugsent', 'plugsent-connector'), 'primary', 'submit', false); ?>
 					</form>
@@ -230,8 +248,17 @@ class Plugsent_Connector
         }
         check_admin_referer('plugsent_pair');
 
-        $server = untrailingslashit(esc_url_raw(wp_unslash($_POST['plugsent_server'] ?? '')));
-        $code = sanitize_text_field(wp_unslash($_POST['plugsent_code'] ?? ''));
+        // The connection string bundles both values: "server::credential".
+        $raw = sanitize_text_field(wp_unslash($_POST['plugsent_connection'] ?? ''));
+        $parsed = self::parse_connection_string($raw);
+
+        if (null === $parsed) {
+            self::redirect('bad_code');
+        }
+
+        [$server, $code] = $parsed;
+        $server = untrailingslashit(esc_url_raw($server));
+        $code = sanitize_text_field($code);
 
         if (empty($server) || empty($code)) {
             self::redirect('bad_code');

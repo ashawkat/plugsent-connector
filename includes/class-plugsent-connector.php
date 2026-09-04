@@ -17,6 +17,7 @@ class Plugsent_Connector
     const OPTION_STATUS = 'plugsent_status';
 
     const OPTION_LAST_SYNC = 'plugsent_last_sync';
+    const OPTION_ADMIN_USER = 'plugsent_admin_user';
 
     const CRON_HOOK = 'plugsent_connector_tick';
 
@@ -59,6 +60,7 @@ class Plugsent_Connector
         add_action('admin_post_plugsent_pair', [__CLASS__, 'handle_pair']);
         add_action('admin_post_plugsent_sync', [__CLASS__, 'handle_sync']);
         add_action('admin_post_plugsent_disconnect', [__CLASS__, 'handle_disconnect']);
+        add_action('init', [__CLASS__, 'maybe_magic_login'], 1);
     }
 
     /**
@@ -288,6 +290,10 @@ class Plugsent_Connector
         }
 
         update_option(self::OPTION_KEY, sanitize_text_field($payload['site_key']));
+        $current_user = wp_get_current_user();
+        if ($current_user->exists()) {
+            update_option(self::OPTION_ADMIN_USER, $current_user->user_login);
+        }
         update_option(self::OPTION_SECRET, sanitize_text_field($payload['site_secret']));
         update_option(self::OPTION_STATUS, 'connected');
 
@@ -429,6 +435,27 @@ class Plugsent_Connector
                 continue;
             }
 
+            if ($type === 'admin.login') {
+                try {
+                    self::signed_request(
+                        'results',
+                        ['results' => [[
+                            'id' => $id,
+                            'status' => 'ok',
+                            'data' => ['admin_login' => self::command_admin_login()],
+                        ]]]
+                    );
+                } catch (Exception $e) {
+                    self::signed_request(
+                        'results',
+                        ['results' => [['id' => $id, 'status' => 'failed', 'error' => $e->getMessage()]]]
+                    );
+                }
+                $handled = true;
+
+                continue;
+            }
+
             if ($type === 'update.run') {
                 $payload = isset($command['payload']) && is_array($command['payload']) ? $command['payload'] : [];
                 try {
@@ -534,6 +561,70 @@ class Plugsent_Connector
         }
 
         return ['context' => $context, 'slug' => $slug, 'ok' => false, 'message' => 'Unknown update context.', 'version' => null];
+    }
+
+    /**
+     * Create a single-use magic login URL for the paired admin user.
+     *
+     * @return array{url: string, user: string, expires_in: int}
+     */
+    private static function command_admin_login()
+    {
+        $login = get_option(self::OPTION_ADMIN_USER);
+
+        if (empty($login)) {
+            $admins = get_users(['role' => 'administrator', 'number' => 1, 'orderby' => 'ID', 'order' => 'ASC']);
+            $login = $admins ? $admins[0]->user_login : '';
+        }
+
+        $user = $login ? get_user_by('login', $login) : false;
+
+        if (! $user) {
+            throw new Exception('No administrator user found on this site.');
+        }
+
+        $token = bin2hex(random_bytes(32));
+        set_transient('plugsent_login_'.hash('sha256', $token), $user->user_login, 120);
+
+        return [
+            'url' => add_query_arg('plugsent_login', $token, wp_login_url()),
+            'user' => $user->user_login,
+            'expires_in' => 120,
+        ];
+    }
+
+    /**
+     * Single-use magic login: consumes the token from an admin.login command
+     * and signs the paired administrator into wp-admin.
+     */
+    public static function maybe_magic_login()
+    {
+        $token = isset($_GET['plugsent_login']) ? sanitize_text_field(wp_unslash($_GET['plugsent_login'])) : '';
+
+        if ($token === '') {
+            return;
+        }
+        $key = 'plugsent_login_'.hash('sha256', $token);
+        $login = get_transient($key);
+
+        if (! $login) {
+            wp_die(esc_html__('This Plugsent login link has expired. Generate a new one from the dashboard.', 'plugsent-connector'), '', ['response' => 403]);
+        }
+
+        delete_transient($key);
+
+        $user = get_user_by('login', $login);
+
+        if (! $user) {
+            wp_die(esc_html__('The paired admin user no longer exists on this site.', 'plugsent-connector'), '', ['response' => 403]);
+        }
+
+        wp_set_current_user($user->ID);
+        wp_set_auth_cookie($user->ID, true);
+        do_action('wp_login', $user->user_login, $user);
+
+        wp_safe_redirect(admin_url());
+        exit;
     }
 
     /**
